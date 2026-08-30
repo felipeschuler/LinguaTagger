@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LinguaTagger</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --border:   #2a2d3a;
+      --accent:   #4f8ef7;
+      --accent2:  #7c5cbf;
+      --text:     #e2e6f0;
+      --muted:    #7a7f94;
+      --success:  #3ecf8e;
+      --warning:  #f5a623;
+      --radius:   10px;
+      --font:     'Segoe UI', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+    }
+
+    nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+    }
+
+    .nav-brand {
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--accent);
+      text-decoration: none;
+      letter-spacing: 0.02em;
+    }
+
+    .nav-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem;
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 0.4rem;
+    }
+
+    h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--text);
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.95rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    select, textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 0.6rem 0.8rem;
+      font-size: 0.95rem;
+      font-family: var(--font);
+      outline: none;
+      transition: border-color 0.2s;
+      margin-bottom: 1.2rem;
+    }
+
+    select:focus, textarea:focus {
+      border-color: var(--accent);
+    }
+
+    textarea { resize: vertical; min-height: 90px; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.4rem;
+      border-radius: 6px;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      text-decoration: none;
+    }
+
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .badge-noun  { background: #1e3a5f; color: #7ab3f0; }
+    .badge-verb  { background: #1e3d2f; color: #5ecf9a; }
+    .badge-adj   { background: #3d2a1e; color: #f0a96a; }
+    .badge-adv   { background: #2d1e3d; color: #b07af0; }
+    .badge-pron  { background: #1e3535; color: #6ae0e0; }
+    .badge-det   { background: #3d3520; color: #e0c96a; }
+    .badge-adp   { background: #3d2030; color: #f07aaa; }
+    .badge-other { background: #252830; color: var(--muted); }
+
+    .alert {
+      padding: 0.8rem 1rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .alert-warning {
+      background: #2d2210;
+      border: 1px solid #6b4c10;
+      color: var(--warning);
+    }
+
+    .token-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 0.5rem;
+    }
+
+    .token-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 0.8rem;
+      min-width: 70px;
+    }
+
+    .token-word {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .sub-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+      justify-content: center;
+    }
+
+    .sub-tok {
+      font-size: 0.7rem;
+      background: #252830;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.1rem 0.3rem;
+      color: var(--muted);
+      font-family: monospace;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th {
+      text-align: left;
+      padding: 0.6rem 0.8rem;
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 0.6rem 0.8rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    .tag-desc {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+      border-top: 1px solid var(--border);
+      margin-top: 3rem;
+    }
+    .token-certo  { border-color: var(--success) !important; }
+    .token-errado { border-color: var(--warning) !important; }
+  </style>
+</head>
+<body>
+<nav>
+  <a href="/" class="nav-brand">LinguaTagger</a>
+  <span class="nav-sub">UFBA — Felipe Schuler Fernandes</span>
+</nav>
+<main>
+  {% block content %}{% endblock %}
+</main>
+<footer>
+  Universidade Federal da Bahia &nbsp;·&nbsp; Instituto de Ciência da Computação &nbsp;·&nbsp; 2026
+</footer>
+</body>
+</html>

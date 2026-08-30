@@ -1,0 +1,179 @@
+{% extends "tagger/base.html" %}
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem;">
+  <a href="/" class="btn btn-ghost">← Voltar</a>
+  <div>
+    <h1>{{ lingua.nome }}</h1>
+    <p class="subtitle" style="margin:0;">{{ lingua.familia }}</p>
+  </div>
+</div>
+
+{% if aviso %}
+<div class="alert alert-warning">⚠ {{ aviso }}</div>
+{% endif %}
+
+{% if nome_arquivo %}
+<div class="card">
+  <h2>Arquivo analisado</h2>
+  <p style="color:var(--muted); font-size:0.9rem;">📄 {{ nome_arquivo }}</p>
+  {% if tem_gabarito %}
+  <p style="color:var(--success); font-size:0.85rem; margin-top:0.4rem;">
+    ✓ Arquivo com anotações reais — mostrando comparação predição vs gabarito
+  </p>
+  {% endif %}
+</div>
+{% elif texto %}
+<div class="card">
+  <h2>Texto analisado</h2>
+  <p style="color:var(--muted); font-size:0.9rem;">{{ texto }}</p>
+</div>
+{% endif %}
+
+{% if stats %}
+<div class="card">
+  <h2>Resumo da avaliação</h2>
+  <div style="display:flex; gap:2rem; flex-wrap:wrap;">
+    <div style="text-align:center;">
+      <div style="font-size:2rem; font-weight:700; color:var(--success);">{{ stats.acuracia }}%</div>
+      <div style="color:var(--muted); font-size:0.85rem;">Acurácia</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:2rem; font-weight:700; color:var(--accent);">{{ stats.acertos }}</div>
+      <div style="color:var(--muted); font-size:0.85rem;">Acertos</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:2rem; font-weight:700; color:var(--warning);">{{ stats.erros }}</div>
+      <div style="color:var(--muted); font-size:0.85rem;">Erros</div>
+    </div>
+    <div style="text-align:center;">
+      <div style="font-size:2rem; font-weight:700; color:var(--text);">{{ stats.total }}</div>
+      <div style="color:var(--muted); font-size:0.85rem;">Total de tokens</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if resultado_tri %}
+<div class="card">
+  <h2>Resultado — Trigramas com Backoff</h2>
+  <p class="tag-desc" style="margin-bottom:1rem;">
+    Para cada palavra, o modelo consulta as tags das palavras vizinhas e escolhe a classe gramatical mais provável.
+    {% if tem_gabarito %}
+    <span style="color:var(--success);">■</span> Verde = acerto &nbsp;
+    <span style="color:var(--warning);">■</span> Laranja = erro
+    {% endif %}
+  </p>
+  <div class="token-grid">
+    {% for item in resultado_tri %}
+    <div class="token-item {% if item.gabarito %}{% if item.acerto %}token-certo{% else %}token-errado{% endif %}{% endif %}">
+      <span class="token-word">{{ item.palavra }}</span>
+      <span class="badge
+        {% if item.tag == 'NOUN' or item.tag == 'n' %}badge-noun
+        {% elif item.tag == 'VERB' or item.tag == 'v' %}badge-verb
+        {% elif item.tag == 'ADJ' or item.tag == 'adj' %}badge-adj
+        {% elif item.tag == 'ADV' or item.tag == 'adv' %}badge-adv
+        {% elif item.tag == 'PRON' or item.tag == 'pron' or item.tag == 'pron.' %}badge-pron
+        {% elif item.tag == 'DET' or item.tag == 'det' %}badge-det
+        {% elif item.tag == 'ADP' or item.tag == 'prep' %}badge-adp
+        {% else %}badge-other{% endif %}
+      ">{{ item.tag }}</span>
+      {% if item.gabarito and not item.acerto %}
+      <span style="font-size:0.7rem; color:var(--warning);">← {{ item.gabarito }}</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if resultado_bpe %}
+<div class="card">
+  <h2>Resultado — BPE + Léxico</h2>
+  <p class="tag-desc" style="margin-bottom:1rem;">
+    Cada palavra é segmentada em subpalavras pelo BPE. A tag vem do léxico do corpus.
+    {% if tem_gabarito %}
+    <span style="color:var(--success);">■</span> Verde = acerto &nbsp;
+    <span style="color:var(--warning);">■</span> Laranja = erro
+    {% endif %}
+  </p>
+  <div class="token-grid">
+    {% for item in resultado_bpe %}
+    <div class="token-item {% if item.gabarito %}{% if item.acerto %}token-certo{% else %}token-errado{% endif %}{% endif %}">
+      <span class="token-word">{{ item.palavra }}</span>
+      <span class="badge
+        {% if item.tag == 'NOUN' or item.tag == 'n' %}badge-noun
+        {% elif item.tag == 'VERB' or item.tag == 'v' %}badge-verb
+        {% elif item.tag == 'ADJ' or item.tag == 'adj' %}badge-adj
+        {% elif item.tag == 'ADV' or item.tag == 'adv' %}badge-adv
+        {% elif item.tag == 'PRON' or item.tag == 'pron' or item.tag == 'pron.' %}badge-pron
+        {% elif item.tag == 'DET' or item.tag == 'det' %}badge-det
+        {% elif item.tag == 'ADP' or item.tag == 'prep' %}badge-adp
+        {% else %}badge-other{% endif %}
+      ">{{ item.tag }}</span>
+      <div class="sub-list">
+        {% for s in item.subtokens %}
+        <span class="sub-tok">{{ s }}</span>
+        {% endfor %}
+      </div>
+      {% if item.gabarito and not item.acerto %}
+      <span style="font-size:0.7rem; color:var(--warning);">← {{ item.gabarito }}</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if resultado_lex %}
+<div class="card">
+  <h2>Resultado — Léxico (baseline)</h2>
+  <p class="tag-desc" style="margin-bottom:1rem;">
+    Cada palavra recebe a tag mais frequente do corpus. OOV = nunca vista no treino.
+    {% if tem_gabarito %}
+    <span style="color:var(--success);">■</span> Verde = acerto &nbsp;
+    <span style="color:var(--warning);">■</span> Laranja = erro
+    {% endif %}
+  </p>
+  <div class="token-grid">
+    {% for item in resultado_lex %}
+    <div class="token-item {% if item.gabarito %}{% if item.acerto %}token-certo{% else %}token-errado{% endif %}{% endif %}">
+      <span class="token-word">{{ item.palavra }}</span>
+      <span class="badge
+        {% if item.tag == 'NOUN' or item.tag == 'n' %}badge-noun
+        {% elif item.tag == 'VERB' or item.tag == 'v' %}badge-verb
+        {% elif item.tag == 'ADJ' or item.tag == 'adj' %}badge-adj
+        {% elif item.tag == 'ADV' or item.tag == 'adv' %}badge-adv
+        {% elif item.tag == 'PRON' or item.tag == 'pron' or item.tag == 'pron.' %}badge-pron
+        {% elif item.tag == 'DET' or item.tag == 'det' %}badge-det
+        {% elif item.tag == 'ADP' or item.tag == 'prep' %}badge-adp
+        {% else %}badge-other{% endif %}
+      ">{{ item.tag }}</span>
+      <span style="font-size:0.7rem; color:var(--muted);">{{ item.confianca }}</span>
+      {% if item.gabarito and not item.acerto %}
+      <span style="font-size:0.7rem; color:var(--warning);">← {{ item.gabarito }}</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Legenda das tags</h2>
+  <table>
+    <thead><tr><th>Tag</th><th>Classe gramatical</th><th>Exemplo</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge badge-noun">NOUN / n</span></td><td>Substantivo</td><td class="tag-desc">governo, casa, tupã</td></tr>
+      <tr><td><span class="badge badge-verb">VERB / v</span></td><td>Verbo</td><td class="tag-desc">correu, sonhei, salva</td></tr>
+      <tr><td><span class="badge badge-adj">ADJ / adj</span></td><td>Adjetivo</td><td class="tag-desc">bonito, rápido, catú</td></tr>
+      <tr><td><span class="badge badge-adv">ADV / adv</span></td><td>Advérbio</td><td class="tag-desc">ontem, rapidamente</td></tr>
+      <tr><td><span class="badge badge-pron">PRON / pron</span></td><td>Pronome</td><td class="tag-desc">eu, ele, nde</td></tr>
+      <tr><td><span class="badge badge-det">DET / det</span></td><td>Determinante</td><td class="tag-desc">o, a, os, as</td></tr>
+      <tr><td><span class="badge badge-adp">ADP / prep</span></td><td>Preposição</td><td class="tag-desc">de, em, para</td></tr>
+      <tr><td><span class="badge badge-other">PUNCT</span></td><td>Pontuação</td><td class="tag-desc">. , ;</td></tr>
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends "tagger/base.html" %}
+{% block content %}
+
+<h1>LinguaTagger</h1>
+<p class="subtitle">
+  Ferramenta de anotação morfossintática para línguas de baixo recurso.<br>
+  Selecione a língua, o modelo e carregue um arquivo para analisar.
+</p>
+
+{% if erro %}
+<div class="alert alert-warning">{{ erro }}</div>
+{% endif %}
+
+<form method="post" action="/analisar/" enctype="multipart/form-data">
+  {% csrf_token %}
+
+  <div class="card">
+    <h2>Configuração</h2>
+
+    <label for="lingua">Língua</label>
+    <select name="lingua" id="lingua">
+      {% for key, info in linguas.items %}
+      <option value="{{ key }}">{{ info.nome }} — {{ info.familia }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="modelo">Modelo</label>
+    <select name="modelo" id="modelo">
+      <option value="trigrama">Trigramas com Backoff</option>
+      <option value="bpe">BPE + Léxico</option>
+      <option value="lexico">Léxico (baseline)</option>
+    </select>
+
+    <label for="arquivo">Arquivo para analisar</label>
+    <div style="margin-bottom:1.2rem;">
+      <input type="file" name="arquivo" id="arquivo"
+        accept=".txt,.flextext,.conllu,.fwdata"
+        style="display:none;"
+        onchange="mostrarNome(this)">
+      <label for="arquivo" class="btn btn-ghost" style="cursor:pointer; display:inline-flex;">
+        📂 Selecionar arquivo
+      </label>
+      <span id="nome-arquivo" style="margin-left:0.8rem; color:var(--muted); font-size:0.9rem;">
+        Nenhum arquivo selecionado
+      </span>
+    </div>
+
+    <label for="texto">Ou cole o texto aqui</label>
+    <textarea name="texto" id="texto"
+      placeholder="Digite ou cole o texto aqui..."></textarea>
+
+    <button type="submit" class="btn btn-primary">Analisar →</button>
+  </div>
+</form>
+
+<div class="card">
+  <h2>Sobre os modelos</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Modelo</th>
+        <th>Como funciona</th>
+        <th>Disponível para</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Trigramas</strong></td>
+        <td class="tag-desc">Usa o contexto das tags vizinhas para predizer a classe gramatical de cada palavra.</td>
+        <td class="tag-desc">Tupinambá</td>
+      </tr>
+      <tr>
+        <td><strong>BPE + Léxico</strong></td>
+        <td class="tag-desc">Segmenta cada palavra em subpalavras (morfemas estatísticos) e consulta o léxico.</td>
+        <td class="tag-desc">Tupinambá</td>
+      </tr>
+      <tr>
+        <td><strong>Léxico</strong></td>
+        <td class="tag-desc">Consulta a tag mais frequente de cada palavra no corpus. Baseline simples.</td>
+        <td class="tag-desc">Todas as línguas</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Formatos suportados</h2>
+  <table>
+    <thead>
+      <tr><th>Formato</th><th>Descrição</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>.txt</code></td>
+        <td class="tag-desc">Texto puro, cada linha é uma frase. O modelo tagueia tudo.</td>
+      </tr>
+      <tr>
+        <td><code>.flextext</code></td>
+        <td class="tag-desc">Exportação do FLEx com anotações reais, o modelo prediz e compara com o gabarito.</td>
+      </tr>
+      <tr>
+        <td><code>.conllu</code></td>
+        <td class="tag-desc">Formato Universal Dependencies, o modelo prediz e compara com as tags reais.</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function mostrarNome(input) {
+  const span = document.getElementById('nome-arquivo');
+  span.textContent = input.files[0] ? input.files[0].name : 'Nenhum arquivo selecionado';
+}
+</script>
+
+{% endblock %}
