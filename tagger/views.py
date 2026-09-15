@@ -7,7 +7,12 @@ CORPUS_DIR = BASE / 'corpus'
 
 START, END = '<START>', '<END>'
 
-def ler_lexico_fwdata(caminho):
+# ----------------------------------------------------------------
+# Extrair frases e léxico de .fwdata
+# Navega: Segment -> Analyses -> WfiAnalysis/WfiGloss -> POS
+# ----------------------------------------------------------------
+def ler_fwdata(caminho):
+    frases = []
     lexico = defaultdict(Counter)
     try:
         from lxml import etree
@@ -27,10 +32,28 @@ def ler_lexico_fwdata(caminho):
         def get_form(guid):
             obj = index.get(guid)
             if obj is None: return None
-            for form in obj.findall('.//Form/AUni'):
-                if form.text: return form.text.strip()
+            for f in obj.findall('.//Form/AUni'):
+                if f.text: return f.text.strip()
             return None
 
+        def pos_from_analysis(ana_guid):
+            ana = index.get(ana_guid)
+            if ana is None: return None
+            for mb_ref in ana.findall('.//MorphBundles/objsur'):
+                mb = index.get(mb_ref.get('guid'))
+                if mb is None: continue
+                for tag in ['MorphSense/objsur', 'Msa/objsur']:
+                    msa_ref = mb.find('.//' + tag)
+                    if msa_ref is None: continue
+                    msa = index.get(msa_ref.get('guid'))
+                    if msa is None: continue
+                    pr = msa.find('.//PartOfSpeech/objsur')
+                    if pr is not None:
+                        p = get_pos(pr.get('guid'))
+                        if p: return p
+            return None
+
+        # Extrair léxico de LexEntry
         for rt in root.findall('rt'):
             if rt.get('class') != 'LexEntry': continue
             lf = rt.find('.//LexemeForm/objsur')
@@ -59,10 +82,51 @@ def ler_lexico_fwdata(caminho):
                                 if pos: break
             if pos:
                 lexico[forma.lower()][pos] += 1
-    except Exception as e:
-        print(f"Erro fwdata: {e}")
-    return lexico
 
+        # Extrair frases de Segment
+        for seg in root.findall('rt'):
+            if seg.get('class') != 'Segment': continue
+            frase = []
+            for ana_ref in seg.findall('.//Analyses/objsur'):
+                ana_guid = ana_ref.get('guid')
+                ana      = index.get(ana_guid)
+                if ana is None: continue
+                classe = ana.get('class', '')
+
+                if classe == 'WfiWordform':
+                    forma = get_form(ana_guid)
+                    if forma:
+                        frase.append((forma, None))
+
+                elif classe == 'WfiAnalysis':
+                    owner = ana.get('ownerguid')
+                    forma = get_form(owner) if owner else None
+                    pos   = pos_from_analysis(ana_guid)
+                    if forma:
+                        frase.append((forma, pos))
+                        if pos: lexico[forma.lower()][pos] += 1
+
+                elif classe == 'WfiGloss':
+                    owner  = ana.get('ownerguid')
+                    ana2   = index.get(owner) if owner else None
+                    if ana2 is not None:
+                        wf_guid = ana2.get('ownerguid')
+                        forma   = get_form(wf_guid) if wf_guid else None
+                        pos     = pos_from_analysis(owner)
+                        if forma:
+                            frase.append((forma, pos))
+                            if pos: lexico[forma.lower()][pos] += 1
+
+            if frase:
+                frases.append(frase)
+
+    except Exception as e:
+        print(f"Erro fwdata {caminho}: {e}")
+    return frases, lexico
+
+# ----------------------------------------------------------------
+# Ler .flextext (Tupinambá)
+# ----------------------------------------------------------------
 def ler_flextext_treino(caminho):
     frases, lexico = [], defaultdict(Counter)
     try:
@@ -83,9 +147,12 @@ def ler_flextext_treino(caminho):
             if atual:
                 frases.append(atual)
     except Exception as e:
-        print(f"Erro flextext treino: {e}")
+        print(f"Erro flextext: {e}")
     return frases, lexico
 
+# ----------------------------------------------------------------
+# Ler arquivo enviado pelo usuário
+# ----------------------------------------------------------------
 def ler_arquivo_usuario(arquivo):
     nome     = arquivo.name.lower()
     conteudo = arquivo.read().decode('utf-8', errors='ignore')
@@ -128,15 +195,20 @@ def ler_arquivo_usuario(arquivo):
 
     return tokens[:200], tem_gabarito
 
+# ----------------------------------------------------------------
+# Trigramas
+# ----------------------------------------------------------------
 def treinar_trigrama(frases):
     uni, bi, tri = Counter(), Counter(), Counter()
     lex = defaultdict(Counter)
     for frase in frases:
-        tags = [START] + [t for _, t in frase] + [END]
+        tags = [START] + [t for _, t in frase if t] + [END]
+        if len(tags) < 3: continue
         for t in tags[1:-1]: uni[t] += 1
         for i in range(len(tags)-1): bi[f"{tags[i]}→{tags[i+1]}"] += 1
         for i in range(len(tags)-2): tri[f"{tags[i]}→{tags[i+1]}→{tags[i+2]}"] += 1
-        for p, t in frase: lex[p.lower()][t] += 1
+        for p, t in frase:
+            if t: lex[p.lower()][t] += 1
 
     prob_tri = defaultdict(lambda: defaultdict(float))
     for s, c in tri.items():
@@ -172,15 +244,16 @@ def predizer_tag(prob_tri, prob_bi, lex, tag_mf, tag_ant, tag_pos, palavra):
     return tag_mf
 
 def empacotar(palavras, tags_pred, gabaritos):
-    resultado = []
-    for palavra, tag, gabarito in zip(palavras, tags_pred, gabaritos):
-        acerto = (tag == gabarito) if gabarito else None
-        resultado.append({'palavra': palavra, 'tag': tag,
-                          'gabarito': gabarito, 'acerto': acerto})
-    return resultado
+    return [{'palavra': p, 'tag': t, 'gabarito': g,
+             'acerto': (t == g) if g else None}
+            for p, t, g in zip(palavras, tags_pred, gabaritos)]
 
-def rodar_trigrama(frases, tokens_com_gabarito):
+def rodar_trigrama(frases, lexico_ext, tokens_com_gabarito):
     prob_tri, prob_bi, lex, tag_mf = treinar_trigrama(frases)
+    # Incorpora léxico externo
+    for palavra, contagens in lexico_ext.items():
+        for tag, count in contagens.items():
+            lex[palavra][tag] += count
     palavras  = [p for p, _ in tokens_com_gabarito]
     gabaritos = [g for _, g in tokens_com_gabarito]
     tags_pred = []
@@ -190,6 +263,9 @@ def rodar_trigrama(frases, tokens_com_gabarito):
         tags_pred.append(tag)
     return empacotar(palavras, tags_pred, gabaritos)
 
+# ----------------------------------------------------------------
+# BPE
+# ----------------------------------------------------------------
 def rodar_bpe(frases, lexico_ext, tokens_com_gabarito):
     from tokenizers import Tokenizer
     from tokenizers.models import BPE
@@ -201,13 +277,13 @@ def rodar_bpe(frases, lexico_ext, tokens_com_gabarito):
     corpus_palavras = []
     for frase in frases:
         for palavra, tag in frase:
-            lex[palavra.lower()][tag] += 1
             corpus_palavras.append(palavra)
+            if tag: lex[palavra.lower()][tag] += 1
     for palavra, contagens in lexico_ext.items():
         for tag, count in contagens.items():
             lex[palavra][tag] += count
 
-    tag_mf = (Counter(t for f in frases for _, t in f).most_common(1)[0][0]
+    tag_mf = (Counter(t for f in frases for _, t in f if t).most_common(1)[0][0]
               if frases else 'n')
 
     with tempfile.NamedTemporaryFile(mode='w', suffix='.txt',
@@ -217,31 +293,36 @@ def rodar_bpe(frases, lexico_ext, tokens_com_gabarito):
 
     tokenizer = Tokenizer(BPE(unk_token='[UNK]'))
     tokenizer.pre_tokenizer = Whitespace()
-    trainer = BpeTrainer(vocab_size=300, min_frequency=2,
+    trainer = BpeTrainer(vocab_size=500, min_frequency=2,
                          special_tokens=['[UNK]'])
     tokenizer.train([tmp], trainer)
     os.unlink(tmp)
 
     resultado = []
     for palavra, gabarito in tokens_com_gabarito:
-        enc     = tokenizer.encode(palavra)
+        enc    = tokenizer.encode(palavra)
         subtoks = enc.tokens
-        chave   = palavra.lower()
-        tag     = lex[chave].most_common(1)[0][0] if chave in lex else tag_mf
-        acerto  = (tag == gabarito) if gabarito else None
+        chave  = palavra.lower()
+        tag    = lex[chave].most_common(1)[0][0] if chave in lex else tag_mf
+        acerto = (tag == gabarito) if gabarito else None
         resultado.append({'palavra': palavra, 'tag': tag,
                           'subtokens': subtoks, 'gabarito': gabarito,
                           'acerto': acerto})
     return resultado
 
+# ----------------------------------------------------------------
+# Léxico
+# ----------------------------------------------------------------
 def rodar_lexico(frases, lexico_ext, tokens_com_gabarito):
     lex = defaultdict(Counter)
     for frase in frases:
-        for palavra, tag in frase: lex[palavra.lower()][tag] += 1
+        for palavra, tag in frase:
+            if tag: lex[palavra.lower()][tag] += 1
     for palavra, contagens in lexico_ext.items():
-        for tag, count in contagens.items(): lex[palavra][tag] += count
+        for tag, count in contagens.items():
+            lex[palavra][tag] += count
 
-    tag_mf = (Counter(t for f in frases for _, t in f).most_common(1)[0][0]
+    tag_mf = (Counter(t for f in frases for _, t in f if t).most_common(1)[0][0]
               if frases else 'n')
 
     resultado = []
@@ -259,6 +340,9 @@ def rodar_lexico(frases, lexico_ext, tokens_com_gabarito):
                           'acerto': acerto})
     return resultado
 
+# ----------------------------------------------------------------
+# Stats
+# ----------------------------------------------------------------
 def calcular_stats(resultado):
     com_gabarito = [r for r in resultado if r.get('gabarito')]
     if not com_gabarito: return None
@@ -267,6 +351,10 @@ def calcular_stats(resultado):
     return {'acertos': acertos, 'erros': total - acertos,
             'total': total, 'acuracia': round(100 * acertos / total, 1)}
 
+# ----------------------------------------------------------------
+# Configuração das línguas
+# Todas com os três modelos agora que temos textos corridos
+# ----------------------------------------------------------------
 LINGUAS = {
     'tupinamba': {
         'nome': 'Tupinambá', 'familia': 'Tupí-Guaraní',
@@ -276,22 +364,22 @@ LINGUAS = {
     'kikongo': {
         'nome': 'Kikongo', 'familia': 'Bantu (Zona H)',
         'arquivo': 'Kikongo.fwdata', 'tipo': 'fwdata',
-        'modelos': ['lexico'],
+        'modelos': ['trigrama', 'bpe', 'lexico'],
     },
     'kimbundu': {
         'nome': 'Kimbundu', 'familia': 'Bantu (Zona H)',
         'arquivo': 'Kimbundu.fwdata', 'tipo': 'fwdata',
-        'modelos': ['lexico'],
+        'modelos': ['trigrama', 'bpe', 'lexico'],
     },
     'dzubukua': {
         'nome': 'Dzubukua', 'familia': 'Macro-Jê / Karirí',
         'arquivo': 'Dzubukua.fwdata', 'tipo': 'fwdata',
-        'modelos': ['lexico'],
+        'modelos': ['trigrama', 'bpe', 'lexico'],
     },
     'kipea': {
         'nome': 'Kipea', 'familia': 'Macro-Jê / Karirí',
         'arquivo': 'Kipea.fwdata', 'tipo': 'fwdata',
-        'modelos': ['lexico'],
+        'modelos': ['trigrama', 'bpe', 'lexico'],
     },
 }
 
@@ -304,11 +392,13 @@ def carregar_lingua(lingua_key):
     if lingua['tipo'] == 'flextext':
         frases, lexico = ler_flextext_treino(caminho)
     else:
-        frases = []
-        lexico = ler_lexico_fwdata(caminho)
+        frases, lexico = ler_fwdata(caminho)
     _cache[lingua_key] = (frases, lexico)
     return frases, lexico
 
+# ----------------------------------------------------------------
+# Views
+# ----------------------------------------------------------------
 def home(request):
     return render(request, 'tagger/home.html', {'linguas': LINGUAS})
 
@@ -343,22 +433,25 @@ def analisar(request):
 
     resultado_tri = resultado_bpe = resultado_lex = aviso = stats = None
 
+    # Avisa se cobertura de POS for baixa
+    total_frase_tokens = sum(len(f) for f in frases)
+    com_pos = sum(1 for f in frases for _, t in f if t)
+    cobertura = (100 * com_pos / total_frase_tokens) if total_frase_tokens > 0 else 0
+    if cobertura < 15 and modelo_key in ['trigrama']:
+        aviso = (f"Atenção: apenas {cobertura:.1f}% dos tokens de {lingua['nome']} "
+                 f"possuem anotação de classe gramatical no corpus. "
+                 f"Os resultados do modelo de Trigramas podem ser limitados.")
+
     if modelo_key == 'trigrama':
-        if 'trigrama' in lingua['modelos'] and frases:
-            resultado_tri = rodar_trigrama(frases, tokens_com_gabarito)
-            stats = calcular_stats(resultado_tri)
-        else:
-            aviso = f"Trigramas não disponível para {lingua['nome']}. Usando léxico."
-            resultado_lex = rodar_lexico(frases, lexico, tokens_com_gabarito)
-            stats = calcular_stats(resultado_lex)
-            modelo_key = 'lexico'
+        resultado_tri = rodar_trigrama(frases, lexico, tokens_com_gabarito)
+        stats = calcular_stats(resultado_tri)
 
     elif modelo_key == 'bpe':
-        if 'bpe' in lingua['modelos'] and frases:
+        if frases or lexico:
             resultado_bpe = rodar_bpe(frases, lexico, tokens_com_gabarito)
             stats = calcular_stats(resultado_bpe)
         else:
-            aviso = f"BPE não disponível para {lingua['nome']}. Usando léxico."
+            aviso = f"Sem dados suficientes para {lingua['nome']}."
             resultado_lex = rodar_lexico(frases, lexico, tokens_com_gabarito)
             stats = calcular_stats(resultado_lex)
             modelo_key = 'lexico'

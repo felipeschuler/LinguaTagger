@@ -1,8 +1,8 @@
 # LinguaTagger: Ferramenta de Anotação Morfossintática para Línguas de Baixo Recurso
 
-**LinguaTagger** é um protótipo de ferramenta web para anotação morfossintática automática de línguas de baixo recurso, línguas indígenas e africanas com poucos dados computacionais disponíveis. A ferramenta aplica três modelos diferentes de Processamento de Linguagem Natural (PLN) e permite carregar arquivos de corpus diretamente para análise.
+**LinguaTagger** é um protótipo de ferramenta web para anotação morfossintática automática de línguas de baixo recurso — línguas indígenas e africanas com poucos dados computacionais disponíveis. A ferramenta aplica três modelos diferentes de Processamento de Linguagem Natural (PLN) e permite carregar arquivos de corpus diretamente para análise.
 
-Desenvolvido para a Iniciação Científica no **Instituto de Ciência da Computação da Universidade Federal da Bahia (UFBA)**, 2025–2026.
+Desenvolvido como entregável da Iniciação Científica no **Instituto de Ciência da Computação da Universidade Federal da Bahia (UFBA)**, 2025–2026.
 
 ---
 
@@ -11,18 +11,18 @@ Desenvolvido para a Iniciação Científica no **Instituto de Ciência da Comput
 | Língua | Família | Modelos disponíveis |
 |--------|---------|-------------------|
 | Tupinambá | Tupí-Guaraní | Trigramas, BPE, Léxico |
-| Kikongo | Bantu (Zona H) | Léxico |
-| Kimbundu | Bantu (Zona H) | Léxico |
-| Dzubukua | Macro-Jê / Karirí | Léxico |
-| Kipea | Macro-Jê / Karirí | Léxico |
+| Kikongo | Bantu (Zona H) | Trigramas, BPE, Léxico |
+| Kimbundu | Bantu (Zona H) | Trigramas, BPE, Léxico |
+| Dzubukua | Macro-Jê / Karirí | Trigramas, BPE, Léxico |
+| Kipea | Macro-Jê / Karirí | Trigramas, BPE, Léxico |
 
 ---
 
 ## Modelos implementados
 
-- **Trigramas com Backoff**: usa o contexto das tags vizinhas para predizer a classe gramatical de cada palavra. Backoff em 4 níveis: trigrama → bigrama → léxico → unigrama.
-- **BPE + Léxico**: segmenta cada palavra em subpalavras via Byte Pair Encoding (biblioteca `tokenizers` do Hugging Face) e consulta o léxico do corpus para atribuir a tag.
-- **Léxico (baseline)**: consulta diretamente a tag mais frequente de cada palavra no corpus de treino. Disponível para todas as línguas.
+- **Trigramas com Backoff** — usa o contexto das tags vizinhas para predizer a classe gramatical de cada palavra. Backoff em 4 níveis: trigrama → bigrama → léxico → unigrama.
+- **BPE + Léxico** — segmenta cada palavra em subpalavras via Byte Pair Encoding (biblioteca `tokenizers` do Hugging Face) e consulta o léxico do corpus para atribuir a tag.
+- **Léxico (baseline)** — consulta diretamente a tag mais frequente de cada palavra no corpus de treino. Disponível para todas as línguas.
 
 ---
 
@@ -73,6 +73,38 @@ http://127.0.0.1:8000/
 
 ---
 
+## Resultados obtidos (Tupinambá — Catecismo Brasílico)
+
+| Modelo | Acurácia |
+|--------|----------|
+| Trigramas com Backoff | 34,7% |
+| BPE + Léxico | 98,3%* |
+
+*O resultado alto do BPE reflete o vocabulário repetitivo do corpus — o léxico conhece a maioria das palavras por terem aparecido no treino. Em textos novos, o desempenho seria menor.
+
+---
+
+## Estrutura do projeto
+
+```
+LinguaTagger/
+├── manage.py
+├── LinguaTagger/
+│   ├── settings.py
+│   └── urls.py
+└── tagger/
+    ├── views.py
+    ├── urls.py
+    ├── corpus/          ← arquivos de dados (não incluídos)
+    └── templates/
+        └── tagger/
+            ├── base.html
+            ├── home.html
+            └── resultado.html
+```
+
+---
+
 ## Dependências
 
 - Python 3.14
@@ -87,7 +119,7 @@ http://127.0.0.1:8000/
 
 Iniciação Científica em Processamento de Linguagem Natural para Línguas de Baixo Recurso.
 
-**Orientadores:** Profa. Lilian Teixeira
+**Orientadores:** Profa. Lilian Teixeira · Prof. Marlo Vieira
 **Estudante:** Felipe Schuler Fernandes
 **Instituição:** Universidade Federal da Bahia — Instituto de Ciência da Computação
 **Período:** 2025–2026
